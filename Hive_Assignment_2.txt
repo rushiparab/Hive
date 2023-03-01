@@ -1,0 +1,110 @@
+Scenario Based questions:
+Q1: Will the reducer work or not if you use “Limit 1” in any HiveQL query?
+Ans: 
+    If query is simple and does not have any grouping,aggrgation,joins involved then reducer will not work.
+    If query is complex and has grouping/aggrgations involved then yes reducer  will work because limit will be applicable on top of the result set return by the reducer.
+
+
+Q2: Suppose I have installed Apache Hive on top of my Hadoop cluster using default metastore configuration. Then, what will happen if we have multiple clients trying to access Hive at the same time? 
+Ans: By default Derby DB is the metastore for hive which does not supports multiple connectiong at a time.
+
+Q3: Suppose, I create a table that contains details of all the transactions done by the customers: CREATE TABLE transaction_details (cust_id INT, amount FLOAT, month STRING, country STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ‘,’ ;
+Now, after inserting 50,000 records in this table, I want to know the total revenue generated for each month. But, Hive is taking too much time in processing this query. How will you solve this problem and list the steps that I will be taking in order to do so?
+Ans: 
+    We can create another partitioned table based on the Month. For that we will use below command:
+
+    /* Creating the partitioned table */
+    CREATE TABLE transaction_details_par
+        (
+            cust_id INT, 
+            amount FLOAT, 
+            country STRING
+        ) 
+    partitioned by (month STRING)
+    
+    ;
+
+    /* Inserting the data into partitioned table*/
+    insert overwrite table transaction_details_par partition(month)
+    select cust_id,amount,country,month from transaction_details;
+
+
+Q4 :How can you add a new partition for the month December in the above partitioned table?
+Ans:
+    insert into table transaction_details_par partition(month='December')
+    select cust_id,amount,country from transaction_details where month='December';
+
+
+Q5: I am inserting data into a table based on partitions dynamically. But, I received an error – FAILED ERROR IN SEMANTIC ANALYSIS: Dynamic partition strict mode requires at least one static partition column. How will you remove this error?
+Ans:
+    We will have to set below hive property:
+    set hive.exec.dynamic.partition.mode=nonstrict;
+
+
+
+
+
+Q6: Suppose, I have a CSV file – ‘sample.csv’ present in ‘/temp’ directory with the following entries:
+id first_name last_name email gender ip_address
+How will you consume this CSV file into the Hive warehouse using built-in SerDe?
+Ans: 
+    First we will have to create table in hive:
+    create table user_details
+    (
+        id int,
+        first_name string,
+        last_name string,
+        email string,
+        gender string,
+        ip_address string
+    )
+    row format serde 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+    with serdeproperties
+    (
+        "separatorChar"=","
+    )
+    stored as textfile
+    tblproperties("skip.header.line.count"="1");
+
+    Then load data into above table using below command:
+
+    load data inpath '/temp/sample.csv' into table user_details;
+
+
+
+Q7: Suppose, I have a lot of small CSV files present in the input directory in HDFS and I want to create a single Hive table corresponding to these files. 
+	The data in these files are in the format: {id, name, e-mail, country}. Now, as we know, Hadoop performance degrades when we use lots of small files.
+So, how will you solve this problem where we want to create a single Hive table for lots of small files without degrading the performance of the system?
+Ans:
+    One can use the SequenceFile format which will group these small files together to form a single sequence file. 
+	The steps that will be followed in doing so are as follows:
+	
+	CREATE TABLE temp_table 
+	(id INT, 
+	name STRING, 
+	e-mail STRING, 
+	country STRING)
+	ROW FORMAT DELIMITED
+	FIELDS  TERMINATED BY ',' 
+	STORED AS TEXTFILE;
+	
+	LOAD DATA INPATH '/input' INTO TABLE temp_table;
+	
+	
+	CREATE TABLE sample_seqfile 
+	(id INT, name STRING, e-mail STRING, country STRING)
+	ROW FORMAT DELIMITED 
+	FIELDS DELIMITED TERMINATED BY ',' 
+	STORED AS SEQUENCEFILE;
+	
+	INSERT OVERWRITE TABLE sample SELECT * FROM temp_table;
+    
+
+
+Q8:
+LOAD DATA LOCAL INPATH ‘Home/country/state/’
+OVERWRITE INTO TABLE address;
+The following statement failed to execute. What can be the cause?
+Ans:
+    Above commnd will fail because we have not given file name in ‘Home/country/state/’
+
