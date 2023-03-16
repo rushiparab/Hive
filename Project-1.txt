@@ -1,0 +1,234 @@
+
+1. Create a schema based on the given dataset
+
+create table agent_performance
+(
+    SL_No    int    ,
+    Date_id    string    ,
+    Agent_Name    string    ,
+    Total_Chats    int    ,
+    Average_Response_Time    string    ,
+    Average_Resolution_Time    string    ,
+    Average_Rating    float    ,
+    Total_Feedback    int    
+)
+row format delimited
+fields terminated by ','
+collection items terminated by ':'
+stored as textfile
+tblproperties("skip.header.line.count"="1");
+
+
+
+
+create table agent_logging_report
+(
+SL_No int,
+Agent string,
+Date_id string,
+Login_Time string,
+Logout_Time string,
+Duration string 
+)
+row format delimited
+fields terminated by ','
+collection items terminated by ':'
+stored as textfile
+tblproperties("skip.header.line.count"="1");
+
+
+
+select 
+agent_name,
+weekofyear(date_id) as wk,
+cast(split(Average_Response_Time,':')[0] as int)*60
+    +cast(split(Average_Response_Time,':')[1] as int)+cast(split(Average_Response_Time,':')[2] as int)/60.0 as avg_response_time_in_mins
+from agent_logging_report
+group by 
+agent_name,
+weekofyear(date_id)
+
+
+
+
+
+
+2. Dump the data inside the hdfs in the given schema location.
+
+hadoop fs -mkdir /input_data/;
+hadoop fs -copyFromLocal /config/workspace/AgentPerformance.csv /input_data/;
+hadoop fs -copyFromLocal /config/workspace/AgentLogingReport.csv /input_data/;
+load data inpath '/input_data/AgentPerformance.csv' into table agent_performance;
+load data inpath '/input_data/AgentLogingReport.csv' into table agent_logging_report;
+
+
+
+3. List of all agents' names. 
+Ans: 
+select agent_name from agent_performance;
+
+
+4. Find out agent average rating.
+Ans: 
+
+
+select agent_name,avg(average_rating)
+from agent_performance
+group by agent_name;
+
+
+5. Total working days for each agents 
+Ans:
+
+
+select agent,count(1) as total_working_days
+from agent_logging_report
+group by agent;
+
+6. Total query that each agent have taken 
+Ans:
+
+select agent_name,count(1) as total_queries_taken
+from agent_performance
+group by agent_name;
+
+7. Total Feedback that each agent have received 
+Ans:
+
+select agent_name,count(Total_Feedback) as total_feedback_received
+from agent_performance
+group by agent_name;
+
+
+8. Agent name who have average rating between 3.5 to 4 
+
+select agent_name
+from agent_performance
+group by agent_name
+having avg(average_rating)>=3.5 and avg(average_rating)<=4
+;
+
+
+
+9. Agent name who have rating less than 3.5 
+select agent_name
+from agent_performance
+group by agent_name
+having avg(average_rating)<3.5
+;
+
+
+10. Agent name who have rating more than 4.5 
+select agent_name
+from agent_performance
+group by agent_name
+having avg(average_rating)>4.5
+;
+11. How many feedback agents have received more than 4.5 average
+select agent_name,count(Total_Feedback)
+from agent_performance
+group by agent_name
+having avg(average_rating)>4.5
+;
+
+
+12. average weekly response time for each agent 
+Ans: 
+
+select 
+agent_name,
+weekofyear(from_unixtime(unix_timestamp(date_id,'MM/dd/yyyy'))) as wk,
+avg(cast(split(Average_Response_Time,':')[0] as int)*60
+    +cast(split(Average_Response_Time,':')[1] as int)+cast(split(Average_Response_Time,':')[2] as int)/60.0) as avg_response_time_in_mins
+from agent_performance
+group by 
+agent_name,
+weekofyear(from_unixtime(unix_timestamp(date_id,'MM/dd/yyyy')))
+order by agent_name;
+
+
+13. average weekly resolution time for each agents 
+
+select 
+agent_name,
+weekofyear(from_unixtime(unix_timestamp(date_id,'MM/dd/yyyy'))) as wk,
+avg(cast(split(Average_Resolution_Time,':')[0] as int)*60
+    +cast(split(Average_Resolution_Time,':')[1] as int)+cast(split(Average_Resolution_Time,':')[2] as int)/60.0) as avg_response_time_in_mins
+from agent_performance
+group by 
+agent_name,
+weekofyear(from_unixtime(unix_timestamp(date_id,'MM/dd/yyyy')))
+order by agent_name;
+
+
+14. Find the number of chat on which they have received a feedback 
+select agent_name,sum(Total_Chats)
+from agent_performance
+where Total_Feedback>0
+group by agent_name
+
+;
+
+
+15. Total contribution hour for each and every agents weekly basis 
+Ans:
+
+select 
+weekofyear(from_unixtime(unix_timestamp(temp.date_id,'dd-MMM-yy'))) as wk,
+temp.agent,
+sum(temp.contribution_hrs)
+from 
+(
+select 
+(unix_timestamp(concat(Date_id,Logout_Time),'dd-MMM-yyHH:mm:ss')-unix_timestamp(concat(Date_id,Login_Time),'dd-MMM-yyHH:mm:ss'))/3600.0 as contribution_hrs,
+*
+from agent_logging_report
+) temp
+group by weekofyear(from_unixtime(unix_timestamp(temp.date_id,'dd-MMM-yy'))),
+temp.agent;
+
+
+16. Perform inner join, left join and right join based on the agent column and after joining the table export that data into your local system.
+insert overwrite local directory '/config/workspace/'
+select a.*,b.*
+from agent_performance a 
+join agent_logging_report b on a.agent_name=b.agent
+                            and unix_timestamp(a.date_id,'MM/dd/yyyy')=unix_timestamp(b.date_id,'dd-MMM-yy');
+
+insert overwrite local directory '/config/workspace/'
+select a.*,b.*
+from agent_performance a 
+left join agent_logging_report b on a.agent_name=b.agent
+                            and unix_timestamp(a.date_id,'MM/dd/yyyy')=unix_timestamp(b.date_id,'dd-MMM-yy')
+
+
+insert overwrite local directory '/config/workspace/'
+select a.*,b.*
+from agent_performance a 
+right join agent_logging_report b on a.agent_name=b.agent
+                            and unix_timestamp(a.date_id,'MM/dd/yyyy)=unix_timestamp(b.date_id,'dd-MMM-yy')
+
+
+
+17. Perform partitioning on top of the agent column and then on top of that perform bucketing for each partitioning.
+
+
+create table agent_performance_par
+(
+    SL_No    int    ,
+    Date_id    string    ,
+    Total_Chats    int    ,
+    Average_Response_Time    string    ,
+    Average_Resolution_Time    string    ,
+    Average_Rating    float    ,
+    Total_Feedback    int    
+)
+partitioned by(Agent_Name string)
+clustered by (Date_id)                                                                                                                       
+sorted by (Date_id)                                                                                                                          
+into 3 buckets
+row format delimited
+fields terminated by ','
+collection items terminated by ':'
+stored as textfile
+tblproperties("skip.header.line.count"="1");
