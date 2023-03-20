@@ -1,0 +1,389 @@
+####Table Creation####
+
+create table ticket_details_temp(		
+Summons_Number	bigint	,
+Plate_ID	string	,
+Registration_State	string	,
+Plate_Type	string	,
+Issue_Date	string	,
+Violation_Code	int	,
+Vehicle_Body_Type	string	,
+Vehicle_Make	string	,
+Issuing_Agency	string	,
+Street_Code1	int	,
+Street_Code2	int	,
+Street_Code3	int	,
+Vehicle_Expiration_Date	string	,
+Violation_Location	int	,
+Violation_Precinct	int	,
+Issuer_Precinct	int	,
+Issuer_Code	int	,
+Issuer_Command	string	,
+Issuer_Squad	string	,
+Violation_Time	string	,
+Time_First_Observed	string	,
+Violation_County	string	,
+Violation_In_Front_Of_Or_Opposite	string	,
+House_Number	int	,
+Street_Name	string	,
+Intersecting_Street	string	,
+Date_First_Observed	int	,
+Law_Section	int	,
+Sub_Division	string	,
+Violation_Legal_Code	string	,
+Days_Parking_In_Effect	string	,
+From_Hours_In_Effect	string	,
+To_Hours_In_Effect	string	,
+Vehicle_Color	string	,
+Unregistered_Vehicle	string	,
+Vehicle_Year	int	,
+Meter_Number	string	,
+Feet_From_Curb	int	,
+Violation_Post_Code	int	,
+Violation_Description	string	,
+No_Standing_or_Stopping_Violation	string	,
+Hydrant_Violation	string	,
+Double_Parking_Violation	string	
+)
+row format delimited		
+fields terminated by ','		
+tblproperties("skip.header.line.count"="1")		
+;
+
+create table ticket_details(		
+Summons_Number	bigint	,
+Plate_ID	string	,
+Registration_State	string	,
+Plate_Type	string	,
+Issue_Date	string	,
+Vehicle_Body_Type	string	,
+Vehicle_Make	string	,
+Issuing_Agency	string	,
+Street_Code1	int	,
+Street_Code2	int	,
+Street_Code3	int	,
+Vehicle_Expiration_Date	string	,
+Violation_Location	int	,
+Violation_Precinct	int	,
+Issuer_Precinct	int	,
+Issuer_Code	int	,
+Issuer_Command	string	,
+Issuer_Squad	string	,
+Violation_Time	string	,
+Time_First_Observed	string	,
+Violation_County	string	,
+Violation_In_Front_Of_Or_Opposite	string	,
+House_Number	int	,
+Street_Name	string	,
+Intersecting_Street	string	,
+Date_First_Observed	int	,
+Law_Section	int	,
+Sub_Division	string	,
+Violation_Legal_Code	string	,
+Days_Parking_In_Effect	string	,
+From_Hours_In_Effect	string	,
+To_Hours_In_Effect	string	,
+Vehicle_Color	string	,
+Unregistered_Vehicle	string	,
+Vehicle_Year	int	,
+Meter_Number	string	,
+Feet_From_Curb	int	,
+Violation_Post_Code	int	,
+Violation_Description	string	,
+No_Standing_or_Stopping_Violation	string	,
+Hydrant_Violation	string	,
+Double_Parking_Violation	string	
+)
+partitioned by (Violation_Code int)
+stored as parquet;
+
+haddop fs -mkdir /input_data/
+hadoop fs -copyFromLocal /config/workspace/tickets.csv /input_data/
+load data local inpath '/input_data/tickets.csv' into table ticket_details	
+
+INSERT OVERWRITE TABLE ticket_details PARTITION(Violation_Code) 
+SELECT Summons_Number	,
+Plate_ID	,
+Registration_State	,
+Plate_Type	,
+Issue_Date	,
+Vehicle_Body_Type	,
+Vehicle_Make	,
+Issuing_Agency	,
+Street_Code1	,
+Street_Code2	,
+Street_Code3	,
+Vehicle_Expiration_Date	,
+Violation_Location	,
+Violation_Precinct	,
+Issuer_Precinct	,
+Issuer_Code	,
+Issuer_Command	,
+Issuer_Squad	,
+Violation_Time	,
+Time_First_Observed	,
+Violation_County	,
+Violation_In_Front_Of_Or_Opposite	,
+House_Number	,
+Street_Name	,
+Intersecting_Street	,
+Date_First_Observed	,
+Law_Section	,
+Sub_Division	,
+Violation_Legal_Code	,
+Days_Parking_In_Effect	,
+From_Hours_In_Effect	,
+To_Hours_In_Effect	,
+Vehicle_Color	,
+Unregistered_Vehicle	,
+Vehicle_Year	,
+Meter_Number	,
+Feet_From_Curb	,
+Violation_Post_Code	,
+Violation_Description	,
+No_Standing_or_Stopping_Violation	,
+Hydrant_Violation	,
+Double_Parking_Violation	
+from  ticket_details_temp;
+
+
+
+Part-I: Examine the data
+
+1.) Find the total number of tickets for the year.
+
+select count(1)
+from ticket_details;
+
+
+
+2.) Find out how many unique states, the cars which got parking tickets, came from.
+
+select count(distinct Registration_State)
+from ticket_details
+
+
+
+3.) Some parking tickets don’t have addresses on them, which is cause for concern. 
+Find out how many such tickets there are(i.e. tickets where either "Street Code 1" or "Street Code 2" or "Street Code 3" is empty )
+select count(1)
+from 
+ticket_Details 
+where Street_Code1 ='' or Street_Code2='' or Street_Code3=''
+
+
+
+Part-II: Aggregation tasks
+
+1.) How often does each violation code occur? (frequency of violation codes - find the top 5)
+select Violation_Code,cnt
+from 
+(
+select Violation_Code,count(1) as cnt
+from ticket_Details
+group by Violation_Code) temp 
+order by cnt desc
+limit 5;
+
+
+
+2.) How often does each vehicle body type get a parking ticket? How about the vehicle make? (find the top 5 for both)
+
+select Vehicle_Body_Type,cnt
+from 
+(
+select Vehicle_Body_Type,count(1) as cnt
+from ticket_Details
+group by Vehicle_Body_Type) temp 
+order by cnt desc
+limit 5;
+
+select Vehicle_Make,cnt
+from 
+(
+select Vehicle_Make,count(1) as cnt
+from ticket_Details
+group by Vehicle_Make) temp 
+order by cnt desc
+limit 5;
+
+
+
+
+
+
+
+3.) A precinct is a police station that has a certain zone of the city under its command. Find the (5 highest) frequencies of:
+      a.) Violating Precincts (this is the precinct of the zone where the violation occurred)
+		
+		select Violation_Precinct
+		from 
+		(
+		select Violation_Precinct,count(1) as cnt
+		from ticket_Details
+		where Violation_Code<>0 
+		group by Violation_Precinct
+		) temp 
+		order by cnt desc
+		limit 5;
+	  
+      b.) Issuer Precincts (this is the precinct that issued the ticket)
+	  
+	  select Issuer_Precinct
+		from 
+		(
+		select Issuer_Precinct,count(1) as cnt
+		from ticket_Details
+		where Violation_Code<>0 
+		group by Issuer_Precinct
+		) temp 
+		order by cnt desc
+		limit 5;
+	  
+	  
+4.) Find the violation code frequency across 3 precincts which have issued the most number of tickets - do these precinct zones have an exceptionally high frequency of certain violation codes?
+		
+		select Violation_Code,cnt
+		from 
+		(
+		select Violation_Code,count(1) as cnt
+		from ticket_Details
+		where Issuer_Precinct in (
+			select Issuer_Precinct
+					from (		
+							select Issuer_Precinct,count(1) as cnt
+							from ticket_Details
+							group by Issuer_Precinct
+						) temp
+						order by cnt desc
+					limit 3		
+						)
+		group by Violation_Code
+		) temp 
+		order by cnt desc
+		limit 5;
+		
+		
+		
+
+
+5.) Find out the properties of parking violations across different times of the day: The Violation Time field is specified in a strange format. Find a way to make this into a time attribute that you can use to divide into groups.
+	
+	
+select unix_timestamp(concat(Date_First_Observed,Violation_Time,'yyyyMMddhhmma'))
+from ticket_Details;
+	
+
+
+6.) Divide 24 hours into 6 equal discrete bins of time. The intervals you choose are at your discretion. For each of these groups, find the 3 most commonly occurring violations
+SELECT *
+FROM (SELECT bins_of_time,
+             Violation_Code,
+             ROW_NUMBER() OVER (PARTITION BY bins_of_time ORDER BY cnt DESC) AS rnk
+      FROM (SELECT bins_of_time,
+                   Violation_Code,
+                   COUNT(1) AS cnt
+            FROM (SELECT *,
+                         CASE
+                           WHEN hour_part >= 1 AND hour_part <= 4 THEN 'group_1'
+                           WHEN hour_part >= 5 AND hour_part <= 8 THEN 'group_2'
+                           WHEN hour_part >= 9 AND hour_part <= 12 THEN 'group_3'
+                           WHEN hour_part >= 13 AND hour_part <= 16 THEN 'group_4'
+                           WHEN hour_part >= 17 AND hour_part <= 20 THEN 'group_5'
+                           WHEN hour_part >= 21 AND hour_part <= 23 THEN 'group_6'
+                           WHEN hour_part = 0 THEN 'group_6'
+                         END AS bins_of_time
+                  FROM (SELECT *,
+                               SUBSTR(parsed_datetime,12,2) AS hour_part
+                        FROM (SELECT *,
+                                     from_unixtime(unix_timestamp (concat (Date_First_Observed,Violation_Time,'yyyyMMddhhmma'))) AS parsed_datetime
+                              FROM ticket_Details) TEMP) temp2) temp3
+            GROUP BY bins_of_time,
+                     Violation_Code) temp4) temp5
+WHERE rnk <= 3;
+
+
+
+
+
+
+7.) Now, try another direction. For the 3 most commonly occurring violation codes, find the most common times of day (in terms of the bins from the previous part)
+
+SELECT *
+FROM (SELECT bins_of_time,
+             Violation_Code,
+             ROW_NUMBER() OVER (PARTITION BY Violation_Code ORDER BY cnt DESC) AS rnk
+      FROM (SELECT bins_of_time,
+                   Violation_Code,
+                   COUNT(1) AS cnt
+            FROM (SELECT *,
+                         CASE
+                           WHEN hour_part >= 1 AND hour_part <= 4 THEN 'group_1'
+                           WHEN hour_part >= 5 AND hour_part <= 8 THEN 'group_2'
+                           WHEN hour_part >= 9 AND hour_part <= 12 THEN 'group_3'
+                           WHEN hour_part >= 13 AND hour_part <= 16 THEN 'group_4'
+                           WHEN hour_part >= 17 AND hour_part <= 20 THEN 'group_5'
+                           WHEN hour_part >= 21 AND hour_part <= 23 THEN 'group_6'
+                           WHEN hour_part = 0 THEN 'group_6'
+                         END AS bins_of_time
+                  FROM (SELECT *,
+                               SUBSTR(parsed_datetime,12,2) AS hour_part
+                        FROM (SELECT *,
+                                     from_unixtime(unix_timestamp (concat (Date_First_Observed,Violation_Time,'yyyyMMddhhmma'))) AS parsed_datetime
+                              FROM ticket_Details
+                              WHERE Violation_Code IN (SELECT Violation_Code
+                                           FROM (SELECT Violation_Code,
+                                                        COUNT(1) AS frequency
+                                                 FROM ticket_Details
+                                                 GROUP BY Violation_Code) inner_query                              
+
+) TEMP) temp2) temp3
+            GROUP BY bins_of_time,
+                     Violation_Code) temp4) temp5
+WHERE rnk <= 1;
+
+
+
+
+8.) Let’s try and find some seasonality in this data
+      a.) First, divide the year into some number of seasons, and find frequencies of tickets for each season. (Hint: A quick Google search reveals the following seasons in NYC: Spring(March, April, March); Summer(June, July, August); Fall(September, October, November); Winter(December, January, February))
+	  
+	  
+	  SELECT season,
+       COUNT(1) AS frequency
+FROM (SELECT *,
+             CASE
+               WHEN mon IN ('03','04','05') THEN 'Spring'
+               WHEN mon IN ('06','07','08') THEN 'Summer'
+               WHEN mon IN ('09','10','11') THEN 'Fall'
+               WHEN mon IN ('12','01','03') THEN 'Winter'
+             END AS season
+      FROM (SELECT *,
+                   SUBSTR(Date_First_Observed,5,2) AS mon
+            FROM ticket_Details) TEMP) TEMP 2
+GROUP BY season  
+	  
+	  
+      b.)Then, find the 3 most common violations for each of these seasons.
+	  
+	  SELECT *
+FROM (SELECT season,
+             violation_code,
+             ROW_NUMBER() OVER (PARTITION BY season ORDER BY frequency DESC) AS rnk
+      FROM (SELECT season,
+                   violation_code,
+                   COUNT(1) AS frequency
+            FROM (SELECT *,
+                         CASE
+                           WHEN mon IN ('03','04','05') THEN 'Spring'
+                           WHEN mon IN ('06','07','08') THEN 'Summer'
+                           WHEN mon IN ('09','10','11') THEN 'Fall'
+                           WHEN mon IN ('12','01','03') THEN 'Winter'
+                         END AS season
+                  FROM (SELECT *,
+                               SUBSTR(Date_First_Observed,5,2) AS mon
+                        FROM ticket_Details) TEMP) TEMP 2
+            GROUP BY season,
+                     violation_code) temp3) TEMP 4
+WHERE rnk <= 3;
+
